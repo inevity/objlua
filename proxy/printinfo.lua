@@ -6,66 +6,74 @@ local _M = {
     _VERSION = '1.00',
 }
 
-local i = 0
-
 function _printtable(table_name)
-	i = i + 1
-	for k,v in pairs(table_name) do
-		if type(v) == "table" then
-			if 3 >= i then
-				print(k, ":", table.concat(v, ", "))
-			else
-				print(k .. ", but v is table")
-				_printtable(v)
+    for k,v in pairs(table_name) do    	
+		if type(v) == "table" then	
+			ngx.log(ngx.INFO, "k is " .. k .. " and v is a table")
+			for k1,v1 in pairs(v) do				
+				if type(v1) == "table" then
+					ngx.log(ngx.INFO, "k1 is " .. k1 .. " and v1 is a table")
+					for k2,v2 in pairs(v1) do
+						if type(v2) == "table" then
+							ngx.log(ngx.INFO, "k2 is " .. k2 .. " and v2 is a table")
+							for k3,v3 in pairs(v2) do								
+								if type(v3) == "table" then
+									ngx.log(ngx.INFO, "k3 is " .. k3 .. " and v3 is a table")
+									for k4,v4 in pairs(v3) do
+										if type(v4) == "table" then
+											ngx.log(ngx.INFO, "k4 is " .. k5 .. " and v4 is a table")
+											for k5,v5 in pairs(v4) do
+												if type(v5) == "table" then
+													ngx.log(ngx.INFO, "k5 is " .. k5 .. " and v5 is a table")
+												else
+													ngx.log(ngx.INFO, "k5 is " .. k5 .. " : " .. tostring(v5))
+												end
+											end
+										else
+											ngx.log(ngx.INFO, "k4 is " .. k4 .. " : " .. tostring(v4))
+										end
+									end
+								else
+									ngx.log(ngx.INFO, "k3 is " .. k3 .. " : " .. tostring(v3))
+								end
+							end
+						else
+							ngx.log(ngx.INFO, "k2 is " .. k2 .. " : " .. tostring(v2))
+						end
+					end
+				else
+					ngx.log(ngx.INFO, "k1 is " .. k1 .. " : " .. tostring(v1))
+				end
 			end
 		else
-			print(k .. " : " .. v)
+			ngx.log(ngx.INFO, "k is " .. k .. " : " .. tostring(v))
 		end
 	end
 end
 
-function _M.normalprint(self, printinfo)
+function _normalprint(printinfo)
+	if nil == printinfo then
+		ngx.log(ngx.INFO, "printinfo is nil")
+	end
 	local typestr = type(printinfo)
 
 	if typestr == "table" then
-		print("printinfo is a ", typestr)
-		_printtable(printinfo)
-	elseif typestr == "string" or typestr == "number" or nil == printinfo then
-		print(printinfo, " and its type is ", typestr)
-	elseif typestr == "boolean" then
-		print(tostring(printinfo))
-	else
-		print("Error invoke printinfo: " .. tostring(printinfo))
-	end
-end
-
-
-function _ngx_printtable(table_name)
-	local tablestr
-	for k,v in pairs(table_name) do
-		if type(v) == "table" then
-			local str = _ngx_printtable(v)
-			tablestr = tablestr .."(" .. k .. ": (" .. str .. ");"
+		if nil == next(printinfo) then
+			ngx.log(ngx.INFO, "printinfo is a empty table")
 		else
-			tablestr = tablestr .. "(" .. k .. ": " .. v .. ");"
+			ngx.log(ngx.INFO, "printinfo is a ", typestr)
+			_printtable(printinfo)
 		end
-	end
-
-	return tablestr
-end
-
-function _M.ngxprint(self, printinfo)
-	local typestr = type(printinfo)
-
-	if typestr == "table" then
-		return _ngx_printtable(printinfo)
-	elseif typestr == "string" or typestr == "number" or nil == printinfo then
-		return printinfo .. "its type is " .. typestr
+	elseif typestr == "string" or typestr == "number"then
+		ngx.log(ngx.INFO, "printinfo is " .. printinfo .. "and type is " .. typestr)
 	elseif typestr == "boolean" then
-		return tostring(printinfo) .. "its type is " .. typestr
+		ngx.log(ngx.INFO, "printinfo is " .. tostring(printinfo))
 	else
-		return "Error invoke printinfo: " .. tostring(printinfo)
+		ngx.log(ngx.INFO, "Error invoke printinfo: " .. tostring(printinfo))
 	end
+
+	return
 end
+_M.normalprint = _normalprint
 
 return _M

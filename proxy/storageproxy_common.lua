@@ -17,19 +17,16 @@ function _M.s3_dateTOtimestamp(self, protocaltype, date, date_name)
 
     if "aws2" == protocaltype then
         if "Date" == date_name then
-
+           timestamp = ngx.parse_http_time(date)
         elseif "x-amz-date" == date_name then
-
-        --else
+            timestamp = ngx.parse_http_time(date)
         end
     elseif "aws4" == protocaltype then
         if "Date" == date_name then
-
+           timestamp = ngx.parse_http_time(date)
         elseif "x-amz-date" == date_name then
-
-        --else
+            timestamp = ngx.parse_http_time(date)
         end
-    --else
     end
 
     return true, timestamp
