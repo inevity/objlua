@@ -176,6 +176,8 @@ function _M.do_cmd(self, ...)
         local cmd = string.lower(args[1])
         if cmd == "set" or 
            cmd == "get" or 
+           cmd == "hset" or 
+           cmd == "hget" or 
            cmd == "incr" 
         then
             local key = args[2]

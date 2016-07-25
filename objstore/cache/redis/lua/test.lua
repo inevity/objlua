@@ -58,17 +58,38 @@ if not ok then
     return
 end
 
+-- test set
 for i = 1, 10 do
     local res, err = c1:do_cmd("set", "cluster-key-"..i, "cluster-value-"..i)
     ngx.say("set: cluster-key-"..i..": ",  res, "    ", err)
 end
 
+-- test get
 for i = 1, 10 do
     local res, err = c1:do_cmd("get", "cluster-key-"..i)
     ngx.say("get: cluster-key-"..i..": ",  res, "    ", err)
 end
 
+-- test hset
+for i = 1, 15 do
+    for j = 1,15 do
+        local res, err = c1:do_cmd("hset", "myhash"..i, "mykey"..j, "value"..(i*j))
+        ngx.say("hset: myhash"..i.." mykey"..j..": ",  res, "    ", err)
+    end
+end
+
+-- test hget
+for i = 1, 15 do
+    for j = 1,15 do
+        local res, err = c1:do_cmd("hget", "myhash"..i, "mykey"..j)
+        ngx.say("hget: myhash"..i.." mykey"..j..": ",  res, "    ", err)
+    end
+end
+
+--[[
+-- test incr
 for i = 1, 100000 do
     local res, err = c1:do_cmd("incr", "foobar")
     ngx.say("incr foobar: ",  res, "    ", err)
 end
+--]]
