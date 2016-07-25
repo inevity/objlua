@@ -135,7 +135,7 @@ else
 end
 
 if succ then
-    ngx.say("All tests succeeded.")
+    ngx.say("All tests have succeeded.")
 else
-    ngx.say("Some of the tests failed.")
+    ngx.say("Some of the tests have failed.")
 end
