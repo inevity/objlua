@@ -21,6 +21,38 @@ local _M = new_tab(0, 155)
 _M._VERSION = '0.1'
 
 function _M.new(self, host, port, unisock)
+    -- Yuanguo:
+    -- A request uses the socket in this way:
+    --     1. get a "socket object" from the queue 'socks';
+    --     2. connect. if there is any underlying connection in the cosocket
+    --        connection pool, get one from the cosocket connection pool and 
+    --        bind the "socket object" to it (thus there is no real connect);
+    --     3. use the "socket object" (which has been bound to an underlying
+    --        connection) to do its job;
+    --     4. setkeepalive. that's to mark the "socket object" as 'closed' (un-
+    --        bind with the underlying connection); but the underlying 
+    --        connection is not closed, instead, it is put back to the cosocket 
+    --        connection pool;
+    --     5. put the "socket object" back to the queue 'socks';
+    -- Note that:
+    --     a. the "socket object" is different from the underlying connection in
+    --        the cosocket connection pool;
+    --     b. the life cycle of the "socket objects" in the queue 'socks' is 
+    --        "per request", thus different requets never reuse the same socket;
+    --     c. but the life cycle of cosocket connection pool is the same as
+    --        nginx, so, in step 2, different "socket object" (in the same 
+    --        request or in different requests) may bind to the same underlying
+    --        connection;
+    -- So:
+    --     A. the aim of the queue 'socks' here is to reuse "socket object" in
+    --        the same request (the life cycle of the "socket object" is "per
+    --        request"). It has nothing to do with "connection reuse"; even if
+    --        you get the same "socket object" from the queue, it may bind to  
+    --        different underlying connections in the "connect" (step 2).
+    --     B. the cosocket connection pool gives us the ability to reuse
+    --        connections; "socket objects" in the same request or different
+    --        requests may bind to the same underlying connection (func 
+    --        getreusedtimes can be used to get the reuse times);
     local socks = queue:new(NODE_CONN)
     for i = 1, NODE_CONN do
         local sock = tcpsock:new()
