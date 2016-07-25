@@ -1,0 +1,209 @@
+-- By Yuanguo, 22/7/2016
+
+local NODE_CONN = 4
+
+local ok, new_tab = pcall(require, "table.new")
+if not ok or type(new_tab) ~= "function" then
+    new_tab = function (narr, nrec) return {} end
+end
+
+local ok, queue = pcall(require, "queue")
+if not ok or not queue then
+    error("failed to load queue:" .. (queue or "nil"))
+end
+
+local ok, tcpsock = pcall(require, "tcpsock")
+if not ok or not tcpsock then
+    error("failed to load tcpsock:" .. (tcpsock or "nil"))
+end
+
+local _M = new_tab(0, 155)
+_M._VERSION = '0.1'
+
+function _M.new(self, host, port, unisock)
+    local socks = queue:new(NODE_CONN)
+    for i = 1, NODE_CONN do
+        local sock = tcpsock:new()
+        socks:enqueue(sock)
+    end
+
+    return setmetatable(
+               {host = host, port = port, unisock = unisock, sockets = socks},
+               { __index = self }
+           )
+end
+
+--no need to call init() function. if called, it will make NODE_CONN connections before used
+function _M.init(self)
+    for n, sock in pairs(self.sockets.data) do
+        if not self.host then  -- unix socket
+            local ok, err = sock:connect(self.unisock)
+            if not ok then
+                return nil,"connect " .. (self.unisock or "nil") .. " failed: " .. (err or "nil")
+            end
+        else                   -- host:port
+            local ok, err = sock:connect(self.host, self.port)
+            if not ok then
+                return nil,"connect " .. (self.host or "nil") .. ":" .. (self.port or "nil") .. " failed: " .. (err or "nil")
+            end
+        end
+    end
+end
+
+local function _gen_req(args)
+    local nargs = #args
+
+    local req = new_tab(nargs * 5 + 1, 0)
+    req[1] = "*" .. nargs .. "\r\n"
+    local nbits = 2
+
+    for i = 1, nargs do
+        local arg = args[i]
+        if type(arg) ~= "string" then
+            arg = tostring(arg)
+        end
+
+        req[nbits] = "$"
+        req[nbits + 1] = #arg
+        req[nbits + 2] = "\r\n"
+        req[nbits + 3] = arg
+        req[nbits + 4] = "\r\n"
+
+        nbits = nbits + 5
+    end
+
+    -- it is much faster to do string concatenation on the C land
+    -- in real world (large number of strings in the Lua VM)
+    return req
+end
+
+local function _read_reply(self, sock)
+    local line, err = sock:receive()
+    if not line then
+        return nil, err
+    end
+
+    local prefix = string.byte(line)
+
+    if prefix == 36 then    -- char '$'
+        -- print("bulk reply")
+        local size = tonumber(string.sub(line, 2))
+        if size < 0 then
+            return ngx.null
+        end
+
+        local data, err = sock:receive(size)
+        if not data then
+            return nil, err
+        end
+
+        local dummy, err = sock:receive(2) -- ignore CRLF
+        if not dummy then
+            return nil, err
+        end
+        return data
+    elseif prefix == 43 then    -- char '+'
+        -- print("status reply")
+
+        return string.sub(line, 2)
+
+    elseif prefix == 42 then -- char '*'
+        local n = tonumber(string.sub(line, 2))
+
+        -- print("multi-bulk reply: ", n)
+        if n < 0 then
+            return ngx.null
+        end
+
+        local vals = new_tab(n, 0)
+        local nvals = 0
+        for i = 1, n do
+            local res, err = _read_reply(self, sock)
+            if res then
+                nvals = nvals + 1
+                vals[nvals] = res
+
+            elseif res == nil then
+                return nil, err
+
+            else
+                -- be a valid redis error value
+                nvals = nvals + 1
+                vals[nvals] = {false, err}
+            end
+        end
+
+        return vals
+
+    elseif prefix == 58 then    -- char ':'
+        -- print("integer reply")
+        return tonumber(string.sub(line, 2))
+
+    elseif prefix == 45 then    -- char '-'
+        -- print("error reply: ", n)
+
+        return false, string.sub(line, 2)
+
+    else
+        -- when `line` is an empty string, `prefix` will be equal to nil.
+        return nil, "unkown prefix: \"" .. tostring(prefix) .. "\""
+    end
+end
+
+local function _do_cmd(self, ...)
+    local ok, sock = self.sockets:dequeue()
+    if not ok then  -- if not ok, must be empty 
+        ngx.say("WARNING: queue is empty, maybe queue capacity is too small")
+        sock = tcpsock:new()
+    end
+
+    if not self.host then  -- unix socket
+        local ok, err = sock:connect(self.unisock)
+        if not ok then
+            return nil,"connect " .. (self.unisock or "nil") .. " failed: " .. (err or "nil")
+        end
+    else                   -- host:port
+        local ok, err = sock:connect(self.host, self.port)
+        if not ok then
+            return nil,"connect " .. (self.host or "nil") .. ":" .. (self.port or "nil") .. " failed: " .. (err or "nil")
+        end
+    end
+
+    --ngx.say("err="..(err or "nil"))
+
+    local args = {...}
+    local req = _gen_req(args)
+
+    local bytes, err = sock.sock:send(req)
+    if not bytes then
+        -- in the case of error, not put the socket in queue again, but drop it
+        sock:close()
+        return nil, err
+    end
+
+    local res, err = _read_reply(self, sock.sock)
+    if not res then
+        -- in the case of error, not put the socket in queue again, but drop it
+        sock:close()
+        return nil, err
+    end
+
+    ngx.say("current socket reused times: " .. (sock:get_reused_times() or "nil"))
+
+    --succeeded: try to put the socket in queue
+    sock:setkeepalive(0,20)
+    self.sockets:enqueue(sock)
+
+    return res, err
+end
+
+function _M.do_cmd(self, cmd, ...)
+    return _do_cmd(self, cmd, ...)
+end
+
+function _M.do_cluster_cmd(self, cmd, ...)
+    --return nil, "debug"
+    return _do_cmd(self, "cluster", cmd, ...)
+end
+
+return _M
