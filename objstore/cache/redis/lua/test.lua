@@ -58,23 +58,36 @@ if not ok then
     return
 end
 
+
+local succ = true 
+
 -- test set
 for i = 1, 10 do
     local res, err = c1:do_cmd("set", "cluster-key-"..i, "cluster-value-"..i)
-    ngx.say("set: cluster-key-"..i..": ",  res, "    ", err)
+    if not res then
+        ngx.say("ERROR: failed to set cluster-key-"..i..". err="..(err or "nil"))
+        succ = false
+    end
 end
 
 -- test get
 for i = 1, 10 do
     local res, err = c1:do_cmd("get", "cluster-key-"..i)
-    ngx.say("get: cluster-key-"..i..": ",  res, "    ", err)
+    local expected = "cluster-value-"..i
+    if not res == expected then
+        ngx.say("ERROR: failed to get cluster-key-"..i..". res="..(res or "nil").."; err="..(err or "nil"))
+        succ = false
+    end
 end
 
 -- test hset
 for i = 1, 15 do
     for j = 1,15 do
         local res, err = c1:do_cmd("hset", "myhash"..i, "mykey"..j, "value"..(i*j))
-        ngx.say("hset: myhash"..i.." mykey"..j..": ",  res, "    ", err)
+        if not res then
+            ngx.say("ERROR: failed to hset myhash"..i.." mykey"..j..". err="..(err or "nil"))
+            succ = false
+        end
     end
 end
 
@@ -82,14 +95,47 @@ end
 for i = 1, 15 do
     for j = 1,15 do
         local res, err = c1:do_cmd("hget", "myhash"..i, "mykey"..j)
-        ngx.say("hget: myhash"..i.." mykey"..j..": ",  res, "    ", err)
+        local expected = "value"..(i*j)
+        if not res == expected then
+            ngx.say("ERROR: failed to hget myhash"..i.." mykey"..j..". res="..(res or "nil").."; err="..(err or "nil"))
+            succ = false
+        end
     end
 end
 
---[[
+
 -- test incr
-for i = 1, 100000 do
-    local res, err = c1:do_cmd("incr", "foobar")
-    ngx.say("incr foobar: ",  res, "    ", err)
+local initial = nil
+local res, err = c1:do_cmd("get", "foobar")
+if not res then
+    ngx.say("ERROR: failed to get foobar before incr. err="..(err or "nil"))
+    succ = false
+else
+    initial = res
 end
---]]
+
+for i = 1, 12345 do
+    local res, err = c1:do_cmd("incr", "foobar")
+    if not res then
+        ngx.say("ERROR: failed to incr foobar. err="..(err or "nil"))
+        succ = false
+    end
+end
+
+local expected = initial + 12345
+local res, err = c1:do_cmd("get", "foobar")
+if not res then
+    ngx.say("ERROR: failed to get foobar after incr. err="..(err or "nil"))
+    succ = false
+else
+    if not res == expected then
+        ngx.say("ERROR: incr failed, expected="..(expected or "nil")..", but actual="..(res or "nil"))
+        succ = false
+    end
+end
+
+if succ then
+    ngx.say("All tests succeeded.")
+else
+    ngx.say("Some of the tests failed.")
+end
