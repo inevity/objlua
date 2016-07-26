@@ -53,7 +53,8 @@ function _M.new(self, host, port, unisock)
     --        connections; "socket objects" in the same request or different
     --        requests may bind to the same underlying connection (func 
     --        getreusedtimes can be used to get the reuse times);
-    local socks = queue:new(NODE_CONN,true, host..":"..port)
+    local socks = queue:new(NODE_CONN)
+    --local socks = queue:new(NODE_CONN,true, host..":"..port)
     for i = 1, NODE_CONN do
         local sock = tcpsock:new()
         socks:enqueue(sock)
@@ -220,7 +221,7 @@ local function _do_cmd(self, ...)
         return nil, err
     end
 
-    ngx.say("current socket reused times: " .. (sock:get_reused_times() or "nil"))
+    --ngx.say("current socket reused times: " .. (sock:get_reused_times() or "nil"))
 
     --succeeded: try to put the socket in queue
     sock:setkeepalive(0,20)
