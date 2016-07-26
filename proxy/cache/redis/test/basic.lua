@@ -114,7 +114,8 @@ else
     initial = res
 end
 
-for i = 1, 12345 do
+local steps = 123456
+for i = 1, steps do
     local res, err = c1:do_cmd("incr", "foobar")
     if not res then
         ngx.say("ERROR: failed to incr foobar. err="..(err or "nil"))
@@ -122,7 +123,7 @@ for i = 1, 12345 do
     end
 end
 
-local expected = initial + 12345
+local expected = initial + steps
 local res, err = c1:do_cmd("get", "foobar")
 if not res then
     ngx.say("ERROR: failed to get foobar after incr. err="..(err or "nil"))
@@ -135,7 +136,7 @@ else
 end
 
 if succ then
-    ngx.say("All tests have succeeded.")
+    ngx.say("All basic tests have succeeded.")
 else
-    ngx.say("Some of the tests have failed.")
+    ngx.say("Some of the baisc tests have failed.")
 end
