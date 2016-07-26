@@ -46,9 +46,10 @@ ngx.say(package.cpath)
 
 ngx.say("\r\n-------------------------------------------\r\n")
 
-local cluster = require "redis.cluster"
-if cluster then
-    ngx.say("cluster loaded")
+local ok,cluster = pcall(require, "redis.cluster")
+if not ok or not cluster then
+    ngx.say("failed to load redis.cluster. err="..(cluster or "nil"))
+    return
 end
 
 local c1=cluster:new("127.0.0.1:7000")

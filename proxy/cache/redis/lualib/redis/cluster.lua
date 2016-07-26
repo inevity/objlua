@@ -2,6 +2,20 @@
 
 local NUM_SLOT = 16384
 
+-- We need to refresh the slotmap in the following 2 cases:
+--   1. When we get a "MOVED" error;
+--   2. When the total error reaches a threshold;
+-- Case 1 is straightforward; while the logic for case 2 is:
+--   if a master node is down and fails over to a slave, error (not MOVED) will
+--   occurr because the slotmap is outdated. Thus, if the total error number 
+--   reaches a given threshold, a refresh should be done:
+--         threshold = errnum2refresh * {number of master nodes}
+--   ERRNUM2REFRESH is the default value for errnum2refresh; caller may
+--   overwrite the value by function:
+--         set_errnum2refresh()
+--
+local ERRNUM2REFRESH = 600
+
 local ok, new_tab = pcall(require, "table.new")
 if not ok or type(new_tab) ~= "function" then
     new_tab = function (narr, nrec) return {} end
@@ -44,7 +58,7 @@ function _M.new(self, ...)
     local slotmap = new_tab(NUM_SLOT, 0)
 
     return setmetatable(
-               {nodes = nodes, slotmap = slotmap, needrefresh = false},
+               {nodes = nodes, nodenum = 0, slotmap = slotmap, needrefresh = false, errnum2refresh = ERRNUM2REFRESH, errnum = 0},
                {__index = self}
            )
 end
@@ -52,6 +66,7 @@ end
 
 function _M.refresh(self)
     local got = false
+    self.nodenum = 0
     for nodekey,nd in pairs(self.nodes) do
         ngx.say("\r\n---------- connect "..nodekey.." to get node map ----------")
         local res, err = nd:do_cluster_cmd("nodes")
@@ -97,6 +112,7 @@ function _M.refresh(self)
                     local i,j = string.find(nflags, "master") 
                     if i then -- current line is master
                         local s,p = string.find(nkey, ":")
+
                         if not s then  -- unix socket
                             self.nodes[nkey] = node:new(nil, nil, nkey)
                         else           -- host:port
@@ -104,9 +120,11 @@ function _M.refresh(self)
                             local port = string.sub(nkey, s+1)
                             self.nodes[nkey] = node:new(host,port)
                         end
+
                         if not self.nodes[nkey] then
                             return nil,"failed to create node " .. (nkey or "nil")
                         end
+                        self.nodenum = self.nodenum + 1
 
                         local s,p = string.find(line,status)
                         local slotRanges = string.sub(line, p+1)   -- get everything after status field, that's slot ranges
@@ -134,6 +152,14 @@ function _M.refresh(self)
     return true, "SUCCESS"
 end
 
+
+-- If the total error number reaches a given threshold, a refresh should be done.
+--         threshold = errnum2refresh * {number of master nodes}
+-- this function is to set errnum2refresh, whose default value is ERRNUM2REFRESH
+function _M.set_errnum2refresh(self, num)
+    self.errnum2refresh = (num or ERRNUM2REFRESH) 
+end
+
 -- Yuanguo: according to the Redis Cluster specification: when calculating the
 -- slot of a given key, if there is a hash tag (substring inside {}) in the key,
 -- only the hash tag is hashed;
@@ -154,6 +180,7 @@ local function _do_cmd(self, slot, ...)
         if ok then
             ngx.say("refresh success")
             self.needrefresh = false
+            self.errnum = 0
         else
             ngx.say("refresh failed: "..(err or "nil"))
         end
@@ -161,10 +188,22 @@ local function _do_cmd(self, slot, ...)
 
     local nd = self.slotmap[slot]
     local res,err = nd:do_cmd(...)
-    if not res and string.match(err,"MOVED%s+%d+%s+") then
-        ngx.say("key moved, need refresh")
-        self.needrefresh = true
+
+    if not res then
+        self.errnum = self.errnum + 1
+        if string.match(err,"MOVED%s+%d+%s+") then
+            ngx.say("key moved, need refresh")
+            self.needrefresh = true
+        end
+
+        local total_errnum2refresh = self.errnum2refresh * self.nodenum 
+        if self.errnum >= total_errnum2refresh then
+            ngx.say("too many errors ("..self.errnum.."), need refresh")
+            self.needrefresh = true
+            self.errnum = 0
+        end
     end
+
     return res, err
 end
 
