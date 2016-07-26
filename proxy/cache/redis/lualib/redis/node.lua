@@ -53,7 +53,7 @@ function _M.new(self, host, port, unisock)
     --        connections; "socket objects" in the same request or different
     --        requests may bind to the same underlying connection (func 
     --        getreusedtimes can be used to get the reuse times);
-    local socks = queue:new(NODE_CONN)
+    local socks = queue:new(NODE_CONN,true, host..":"..port)
     for i = 1, NODE_CONN do
         local sock = tcpsock:new()
         socks:enqueue(sock)
@@ -185,7 +185,7 @@ end
 local function _do_cmd(self, ...)
     local ok, sock = self.sockets:dequeue()
     if not ok then  -- if not ok, must be empty 
-        ngx.say("WARNING: queue is empty, maybe queue capacity is too small")
+        ngx.say("WARNING: failed to get a sock from queue, err="..(sock or "nil"))
         sock = tcpsock:new()
     end
 
@@ -224,7 +224,10 @@ local function _do_cmd(self, ...)
 
     --succeeded: try to put the socket in queue
     sock:setkeepalive(0,20)
-    self.sockets:enqueue(sock)
+    local ok,err1 = self.sockets:enqueue(sock)
+    if not ok then
+        ngx.say("WARNING: failed to put sock into the queue, err="..(err1 or "nil"))
+    end
 
     return res, err
 end

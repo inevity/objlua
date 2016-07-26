@@ -7,7 +7,9 @@ echo "Run basic tests ..."
 
 time1=`date +%s`
 
-curl "http://127.0.0.1:8080/redis/test/basic" > test/log/basic_$stamp.log 2>&1
+logdir=test/log
+
+curl "http://127.0.0.1:8080/redis/test/basic" > $logdir/basic_$stamp.log 2>&1
 
 time2=`date +%s`
 elapse=`expr $time2 - $time1`
@@ -33,15 +35,15 @@ total=`expr $steps \* 9`
 
 time1=`date +%s`
 
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > /dev/null 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent1_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent2_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent3_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent4_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent5_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent6_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent7_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent8_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent?c=$steps" > $logdir/concurrent9_$stamp.log 2>&1 &
 
 wait
 
