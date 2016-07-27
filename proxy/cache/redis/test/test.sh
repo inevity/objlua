@@ -93,6 +93,10 @@ elapse=`expr $time2 - $time1`
 #find out the last refresh due to "too many errors"
 line=`grep -n "too many errors.* need refresh" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
 
+if [ -z "$line" ] ; then
+    line=`grep -n "WARNING: failed to get a sock from queue" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
+fi
+
 #skip every thing before last refresh, and find out the statistics after last
 #refresh
 sed -e "1,$line d" $logdir/consistency_$stamp.log > /tmp/consistency_$stamp.log
