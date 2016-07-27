@@ -97,6 +97,14 @@ if [ -z "$line" ] ; then
     line=`grep -n "WARNING: failed to get a sock from queue" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
 fi
 
+if [ -z "$line" ] ; then
+    line=`grep -n "refresh success" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
+fi
+
+if [ -z "$line" ] ; then
+    line=0
+fi
+
 #skip every thing before last refresh, and find out the statistics after last
 #refresh
 sed -e "1,$line d" $logdir/consistency_$stamp.log > /tmp/consistency_$stamp.log
