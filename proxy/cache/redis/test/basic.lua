@@ -115,7 +115,7 @@ else
     initial = res
 end
 
-local steps = 123456
+local steps = 12345
 for i = 1, steps do
     local res, err = c1:do_cmd("incr", "foobar")
     if not res then

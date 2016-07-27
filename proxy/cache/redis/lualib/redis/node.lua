@@ -224,7 +224,7 @@ local function _do_cmd(self, ...)
     --ngx.say("current socket reused times: " .. (sock:get_reused_times() or "nil"))
 
     --succeeded: try to put the socket in queue
-    sock:setkeepalive(0,20)
+    sock:setkeepalive()  --use the default value set by lua_socket_keepalive_timeout and lua_socket_pool_size in nginx conf
     local ok,err1 = self.sockets:enqueue(sock)
     if not ok then
         ngx.say("WARNING: failed to put sock into the queue, err="..(err1 or "nil"))
