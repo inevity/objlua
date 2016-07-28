@@ -12,15 +12,11 @@ local _M = {
     _VERSION = '0.01',
 }
 
---需要注意，从hbase获取的json格式的响应，每一项被base64编码过
-local sp_hbaseop = require("storageproxy_hbase_op")
 local sp_conf = require("storageproxy_conf")
-
 local json = require('cjson')
-local http = require "resty.http"
-
 local ngxprint = require("printinfo")
---sp_conf.config["GET_Service"]["response"]
+
+--s3_["GET_Service"]["response"]
 --[[--xml
 <?xml version="1.0" encoding="UTF-8"?>
 <ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01">
@@ -59,69 +55,116 @@ GET_Service_response = {
 	}
 }
 ]]
-function _M.process_service(self, body, AWS_userinfo)
+function _M.process_service(self, AWS_userinfo)
 	ngx.log(ngx.INFO, "##### Enter process_service")
+	--according to S3_bucket request and transfer demands to construct hbase_request_body
+	--according to S3_bucket request and transfer demands to construct hbase_request_header
 
-	local hbase_api = sp_conf.config["GET_Service"]["hbase_op"]
+	--retrieve hbase_api and request_URI
+	local hbase_api = require(sp_conf.config["s3_GET_Service"]["hbase_op"])
 	local API_uri = "/bucket/" .. AWS_userinfo["uid:"] .. "*"
-	--local API_uri = "/bucket/" .. "test" .. "*"
+	ngx.log(ngx.INFO, "##### API_uri is ", API_uri, " and will invoke ", sp_conf.config["s3_GET_Service"]["hbase_op"])
 
-	ngx.log(ngx.INFO, "API_uri is ", API_uri, " and will invoke sp_hbaseop.", hbase_api)
-	
-	local ok, dbody = sp_hbaseop.hbase_get(API_uri, headers, body)
-	if not ok then
-		return 503, "10000000"
+	--向Hbase操作
+	local httpstatus, ok, dbody = hbase_api:SendtoHbase(API_uri, "service")
+	if 200 ~= httpstatus or not ok then
+		return httpstatus, "20000021"
 	end
 
-	print("###############################")
-	ngxprint.normalprint(dbody)
-	print("###############################")
+	--S3_GET_Service care the body from hbase
 
-	--res是用户的bucketinfo信息
-	--将res解析为GET_Service的 S3 响应
-	local response = sp_conf.config["GET_Service"]["response"]
-	--local response = {}
-	response["ListAllMyBucketsResult"]["Owner"]["ID"] = AWS_userinfo["uid:"]
-	response["ListAllMyBucketsResult"]["Owner"]["DisplayName"] = "dnion_s3"
-
+	--according to the demands of S3_GET_Service and dbody to process s3_response_body
+	local response_body = sp_conf.config["s3_GET_Service"]["s3_response_body"]
+	response_body["ListAllMyBucketsResult"]["Owner"]["ID"] = AWS_userinfo["uid:"]
+	response_body["ListAllMyBucketsResult"]["Owner"]["DisplayName"] = "dnion_s3"
 	for k,v in pairs(dbody) do
 		--k is bucketname, v is bucketinfo
 		local a ={}
 		a["Name"] = k
 		a["CreationDate"] = v["createdate:"]
-		table.insert(response["ListAllMyBucketsResult"]["Buckets"], a)
+		table.insert(response_body["ListAllMyBucketsResult"]["Buckets"], a)
 	end
-
-	print("#########response is #############")
-	ngxprint.normalprint(response)
-	print("########response is ###########")
-
-	local ok, res = pcall(json.encode, response)
+	ngx.log(ngx.INFO, "##### #########response is #############")
+	ngxprint.normalprint(response_body)
+	ngx.log(ngx.INFO, "##### #########response is #############")
+	local ok, res = pcall(json.encode, response_body)
 	if not ok then
-   		return 503, "20000010"
+   		return 200, "20000022"
 	end
 
+	--according to the demands of S3_bucket to process s3_response_header
+	local response_headers = sp_conf.config["s3_GET_Service"]["s3_response_headers"]
+	for k,v in pairs(response_headers) do
+		ngx.header[k] = v
+		-- if "x-amz-request-id" = k then
+		-- 	--generate value
+		-- end
+	end
+
+	--发出响应
 	ngx.say(res)
 	return 200, "00000000"
 end
 
-function _M.process_bucket(self, request_method, operationtype, headers, body, userinfo, bucketname)
-	--获取调用接口
+function _M.process_bucket(self, request_method, operationtype, headers, body, bucketname, AWS_userinfo)
+	ngx.log(ngx.INFO, "##### Enter process_bucket")
+
+	--确认当前对bucket的详细操作
 	if "" == operationtype then
 		op_api = request_method .. "_bucket"
 	else
 		op_api = request_method .. "_bucket_" .. operationtype
 	end
-
-	--查找接口需要的数据（headers和body进行匹配）
-	local hbase_api = sp_conf.config[opapi]["hbase_op"]
     
-    --向Hbase操作
-	local uri = "/bucket/" .. userinfo["uid"] .."_".. bucketname
-	sp_hbaseop.hbase_api(uri, headers, body)	
+	--according to S3_bucket request and transfer demands to construct hbase_request_body
+	local hbase_body = sp_conf.config["s3_bucket_option"][op_api]["hbase_request_body"]
+
+	if "PUT_bucket" == op_api then
+		hbase_body["uid:"] = AWS_userinfo["uid:"]
+		hbase_body["bucketname"] = bucketname
+		--Current retrieve time format is "2016-07-16 16:30:59", But require "2016-07-12T16:41:58.000z"
+		--default choose 008z, TODO find get zone api
+		local time = ngx.localtime() 
+		hbase_body["bucketinfo"]["createdate:"] = string.gsub(time, " ", "T", 1) .. ".008Z"
+	end
+
+	--according to S3_bucket request and transfer demands to construct hbase_request_header
+	local hbase_header --= sp_conf.config["s3_bucket_option"][op_api]["hbase_request_header"]
+
+	--retrieve hbase_api and request_URI
+	local hbase_api = require(sp_conf.config["s3_bucket_option"][op_api]["hbase_op"])
+	local API_uri = "/bucket/" .. AWS_userinfo["uid:"] .."_".. bucketname
+	ngx.log(ngx.INFO, "API_uri is ", API_uri, " and will invoke sp_hbaseop.", sp_conf.config["s3_bucket_option"][op_api]["hbase_op"])
+
+	--return 200, "20000033", real error
+	--向Hbase操作
+	local httpstatus, ok, dbody = hbase_api:SendtoHbase(API_uri, "bucket", hbase_header, hbase_body)
+	if 200 ~= httpstatus or not ok then
+		return httpstatus, "20000031"
+	end
+
+	--PUT_bucket care the status from hbase
+	-- if "PUT_bucket" == op_api then
+	-- end
+
+	--according to the demands of S3_bucket and dbody to process s3_response_body
+	--local response_body = sp_conf.config["s3_bucket_option"][op_api]["s3_response_body"]
+
+	--according to the demands of S3_bucket to process s3_response_header
+	local response_headers = sp_conf.config["s3_bucket_option"][op_api]["s3_response_headers"]
+	for k,v in pairs(response_headers) do
+		ngx.header[k] = v
+		-- if "x-amz-request-id" = k then
+		-- 	--generate value
+		-- end
+	end
+	
+	--发出响应
+	ngx.say(res)
+	return 200, "00000000"
 end
 
-function _M.process_object(self, request_method, operationtype, headers, body, userinfo, bucketname, objectname)
+function _M.process_object(self, request_method, operationtype, headers, body, bucketname, objectname, AWS_userinfo)
 	--根据content-length判断object大小决定存取object的方式
 	return
 end

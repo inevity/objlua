@@ -1,81 +1,119 @@
 --[[
-å­˜å‚¨ä»£ç†é€»è¾‘v1
-Author:      æ¨å©·
+´æ´¢´úÀíÂß¼­v1
+Author:      ÑîæÃ
 Mail:        yangting@dnion.com
 Version:     1.0
 Doc:
-Modifyï¼š
-    2016-07-15  æ¨å©·  åˆå§‹ç‰ˆæœ¬
+Modify£º
+    2016-07-15  ÑîæÃ  ³õÊ¼°æ±¾
 ]]
+
 local access = require('storageproxy_access')
 local accessobj = access.new()
 
 local codelist = require("storageproxy_codelist")
 local sp_s3op = require("storageproxy_s3_op")
 local sp_conf = require("storageproxy_conf")
-
-local comm = require('commfunc')
 local ngxprint = require("printinfo")
 
-local function sendErrorRespToS3Client(code, desc, httpcode, respbody, respheader)
-	ngx.log(ngx.INFO, "sendErrorRespToS3Client")
-	ngx.say("exceptional response")
-	ngx.exit(NGX_OK)
+local json = require('cjson')
+
+local function SendErrorRespToS3Client(code, innercode, s3code, Resource, RequestId)
+	ngx.log(ngx.INFO, "##### SendErrorRespToS3Client")
+
+	--recode exception log
+	ngx.log(ngx.ERR, RequestId, " occur error: ",codelist.codedesc[innercode])
+
+	--return error response to S3Client
+	local error_body = {}
+	local httpcode = code
+	local ok, jbody
+
+	if nil ~= s3code then
+		local message = codelist.S3Error[s3code][1]
+		
+		if codelist.S3Error[s3code][2] then
+			httpcode = codelist.S3Error[s3code][2]
+		end
+
+		error_body["code"] = s3code
+		error_body["Message"] = message
+		error_body["Resource"] = Resource
+		error_body["RequestId"] = RequestId
+
+		ok, jbody = pcall(json.encode, error_body)
+		if not ok or type(jbody)~="string" then
+	    	ngx.log(ngx.ERR, "Encode response body error. body is ", ngxprint.normalprint(error_body), "; when send Error_response to S3_Client")
+			jbody = "storeproxy exceptional quit"
+		end
+	else
+		jbody = "storeproxy exceptional quit"
+	end
+
+	ngx.status = httpcode
+	ngx.say(jbody)
+	ngx.exit(ngx.OK)
 end
 
 local function process_storeproxy()
 	if accessobj.baseinfo["service"] then
-		return sp_s3op:process_service(accessobj.body, accessobj.AWS_userinfo)
+		-- this is a interface to S3 service op
+		return sp_s3op:process_service(accessobj.AWS_userinfo)
 	end
 
 	if accessobj.baseinfo["objectname"] then
-	-- this is a interface to S3 object op
-		return sp_s3op:process_object(accessobj.baseinfo["method"], accessobj.baseinfo["operationtype"], accessobj.headers, accessobj.body, accessobj.baseinfo["bucketname"], accessobj.baseinfo["objectname"])
+		-- this is a interface to S3 object op
+		return sp_s3op:process_object(accessobj.baseinfo["method"], accessobj.baseinfo["operationtype"], accessobj.baseinfo["headers"], accessobj.baseinfo["body"], accessobj.baseinfo["bucketname"], accessobj.baseinfo["objectname"], accessobj.AWS_userinfo)
 	elseif accessobj.baseinfo["bucketname"] then
-	-- this is a interface to S3 bucket op
-		return sp_s3op:process_bucket(accessobj.baseinfo["method"], accessobj.baseinfo["operationtype"], accessobj.headers, accessobj.baseinfo["accessobj.body"], accessobj.baseinfo["bucketname"])
+		-- this is a interface to S3 bucket op
+		return sp_s3op:process_bucket(accessobj.baseinfo["method"], accessobj.baseinfo["operationtype"], accessobj.baseinfo["headers"], accessobj.baseinfo["body"], accessobj.baseinfo["bucketname"], accessobj.AWS_userinfo)
 	else
-		return 404, "10000000"
+		return 404, "10000000", nil
 	end
 end
 
---å­˜å‚¨ä»£ç†ä¸»é€»è¾‘
+--´æ´¢´úÀíÖ÷Âß¼­
 local function handleStoreProxy(sub_request_uri)
-	ngx.log(ngx.INFO, "##### Enter main_service------handleStoreProxy, current sub_request_uri is ", sub_request_uri)
+	ngx.log(ngx.INFO, "##### Enter handleStoreProxy, current sub_request_uri is ", sub_request_uri)
 	local request_headers = ngx.req.get_headers()
 	local request_uri_args = ngx.req.get_uri_args()
 	local request_method = ngx.var.request_method
 
-	--ä»£ç†èº«ä»½éªŒè¯æµç¨‹å¤„ç†
-    local httpcode, code = accessobj:access_authentication(request_method, ngx.var.uri, request_uri_args, request_headers, ngx.var.request_body, sub_request_uri)
-    if code ~= "00000000" then
-        ngx.log(ngx.ERR, "httpcode:" .. httpcode .. " code:" .. code)
-        sendErrorRespToS3Client(code, codelist.codedesc[code], httpcode, "", "", "")
+	local resource, request_id
+
+	--´úÀíÉí·İÑéÖ¤Á÷³Ì´¦Àí
+    local code, innercode, s3code = accessobj:access_authentication(request_method, ngx.var.uri, request_uri_args, request_headers, ngx.var.request_body, sub_request_uri)
+    if innercode ~= "00000000" then
+        ngx.log(ngx.ERR, "code:" .. code .. " code:" .. innercode, ", s3code is ", s3code)
+        SendErrorRespToS3Client(code, innercode, s3code, "", request_id)
     end
 
-	print("######body is ########")
-	ngxprint.normalprint(accessobj.body)
-	print("######baseinfo is ########")
+	ngx.log(ngx.INFO, "##### ######baseinfo is ########")
 	ngxprint.normalprint(accessobj.baseinfo)
-	print("######uri_args is ########")
-	ngxprint.normalprint(accessobj.uri_args)
-	print("######AWS_userinfo is ########")
+	ngx.log(ngx.INFO, "##### ######AWS_userinfo is ########")
 	ngxprint.normalprint(accessobj.AWS_userinfo)
-	print("##############################")
+	ngx.log(ngx.INFO, "##### ##############################")
 
-    --ä»£ç†æ¥å£åˆ†æå¤„ç†
-    --èº«ä»½éªŒè¯é€šè¿‡åï¼Œå¯è·å¾—åˆ†æå¤„ç†åçš„"body\header\args"
-    --ç›´æ¥é€šè¿‡accessobj.body/accessobj.header/accessobj.uri_argsè®¿é—®
-    local httpcode, code = process_storeproxy()
+    --´úÀí½Ó¿Ú·ÖÎö´¦Àí
+    --Éí·İÑéÖ¤Í¨¹ıºó£¬¿É»ñµÃ·ÖÎö´¦ÀíºóµÄ"body\header\args"
+    --Ö±½ÓÍ¨¹ıaccessobj.body/accessobj.header/accessobj.uri_args·ÃÎÊ
+    local code, innercode, s3code = process_storeproxy()
     
-    if code ~= "00000000" then
-        ngx.log(ngx.ERR, "httpcode:" .. httpcode .. " code:" .. code)
-        sendErrorRespToS3Client(code, codelist.codedesc[code], httpcode, "", "", "")
+    if innercode ~= "00000000" then
+        ngx.log(ngx.ERR, "code:" .. code .. " code:" .. innercode, ", s3code is ", s3code)
+
+        if not accessobj.baseinfo["service"] then
+        	if accessobj.baseinfo["objectname"] then
+        		resource = "/" .. accessobj.baseinfo["bucketname"] .. "/" .. accessobj.baseinfo["objectname"]
+        	else
+        		resource = "/" .. accessobj.baseinfo["bucketname"]
+        	end
+        	SendErrorRespToS3Client(code, innercode, s3code, resource, request_id)
+        end
     end
-    return 
 end
 
---å­˜å‚¨ä»£ç†å…¥å£
+--´æ´¢´úÀíÈë¿Ú
 local from, to, err = ngx.re.find(ngx.var.uri, "^/storageproxy/v1", "jo")
 if nil ~= from then
 	ngx.log(ngx.INFO, "##### ngx.var.uri is ", ngx.var.uri)
