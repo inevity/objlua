@@ -38,11 +38,11 @@ time1=`date +%s`
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent1_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent2_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent3_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent4_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent5_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent6_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent4_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent5_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent6_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent7_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent8_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent8_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent9_$stamp.log 2>&1 &
 
 wait
@@ -65,12 +65,12 @@ fi
 # During this period of time, many access errors will occur (because slotmap is
 # outdated). The cluster will refresh the slotmap when too many errors have been
 # found. So, after the last refresh, error numbers should stop increasing. 
-# Thus, we find out the error numbers after the last refresh, and we find out
-# the error numbers at the end. They should be equal to each other.
+# Thus, after restart, we clear the log; in the new log, error num should not
+# increase;
 echo "Run consistency tests ..."
 
 time1=`date +%s`
-curl -s "http://127.0.0.1:8080/redis/test/consistency?round=100" > $logdir/consistency_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/consistency?round=100" | tee $logdir/consistency_$stamp.log | tee /tmp/consistency_$stamp.log > /dev/null 2>&1 &
 
 sleep 1
 
@@ -90,30 +90,9 @@ wait
 time2=`date +%s`
 elapse=`expr $time2 - $time1`
 
-#find out the last refresh due to "too many errors"
-line=`grep -n "too many errors.* need refresh" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
-
-if [ -z "$line" ] ; then
-    line=`grep -n "WARNING: failed to get a sock from queue" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
-fi
-
-if [ -z "$line" ] ; then
-    line=`grep -n "refresh success" $logdir/consistency_$stamp.log | tail -1 | cut -d ':' -f 1`
-fi
-
-if [ -z "$line" ] ; then
-    line=0
-fi
-
-#skip every thing before last refresh, and find out the statistics after last
-#refresh
-sed -e "1,$line d" $logdir/consistency_$stamp.log > /tmp/consistency_$stamp.log
-
-sed -i -e '1,/======================/ d' /tmp/consistency_$stamp.log
-
-#well, discard 1 more, there will be some more errors (not very much) right 
-#after the refresh.
-sed -i -e '1,/======================/ d' /tmp/consistency_$stamp.log
+for x in {1..20} ; do
+    sed -i -e '1,/======================/ d' /tmp/consistency_$stamp.log
+done
 
 reads=`head -n 6 /tmp/consistency_$stamp.log | grep "Num Read" | cut -d ":" -f 2`
 writes=`head -n 6 /tmp/consistency_$stamp.log | grep "Num Write" | cut -d ":" -f 2`

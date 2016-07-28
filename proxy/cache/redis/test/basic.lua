@@ -1,3 +1,4 @@
+--[[
 function printStruct(struct,nspaces)
     local spaces = ""
     for i=1,nspaces do
@@ -46,6 +47,7 @@ ngx.say(package.cpath)
 
 ngx.say("\r\n-------------------------------------------\r\n")
 
+--]]
 local ok,cluster = pcall(require, "redis.cluster")
 if not ok or not cluster then
     ngx.say("failed to load redis.cluster. err="..(cluster or "nil"))

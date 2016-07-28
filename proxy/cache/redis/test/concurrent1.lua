@@ -4,8 +4,6 @@ if not ok or not cluster then
     return
 end
 
-ngx.say("cluster loaded")
-
 local c1,err=cluster:new("127.0.0.1:7000")
 
 if not c1 then

@@ -186,7 +186,7 @@ end
 local function _do_cmd(self, ...)
     local ok, sock = self.sockets:dequeue()
     if not ok then  -- if not ok, must be empty 
-        ngx.say("WARNING: failed to get a sock from queue, err="..(sock or "nil"))
+        ngx.log(ngx.WARN, "failed to get a sock from queue, err="..(sock or "nil"))
         sock = tcpsock:new()
     end
 
@@ -201,8 +201,6 @@ local function _do_cmd(self, ...)
             return nil,"connect " .. (self.host or "nil") .. ":" .. (self.port or "nil") .. " failed: " .. (err or "nil")
         end
     end
-
-    --ngx.say("err="..(err or "nil"))
 
     local args = {...}
     local req = _gen_req(args)
@@ -221,13 +219,13 @@ local function _do_cmd(self, ...)
         return nil, err
     end
 
-    --ngx.say("current socket reused times: " .. (sock:get_reused_times() or "nil"))
+    ngx.log(ngx.DEBUG, "Current socket reused times: " .. (sock:get_reused_times() or "nil"))
 
     --succeeded: try to put the socket in queue
     sock:setkeepalive()  --use the default value set by lua_socket_keepalive_timeout and lua_socket_pool_size in nginx conf
     local ok,err1 = self.sockets:enqueue(sock)
     if not ok then
-        ngx.say("WARNING: failed to put sock into the queue, err="..(err1 or "nil"))
+        ngx.log(ngx.WARN, "failed to put sock into the queue, err="..(err1 or "nil"))
     end
 
     return res, err

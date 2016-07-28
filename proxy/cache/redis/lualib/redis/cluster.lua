@@ -40,14 +40,13 @@ function _M.new(self, ...)
     local args = {...}
     for i = 1, #args do
         local node_key = args[i]  -- unix socket or host:port
-        ngx.say("node_key: "..node_key)
+        ngx.log(ngx.DEBUG, "node_key: "..(node_key or "nil"))
         local i,j = string.find(node_key, ":")
         if not i then  -- unix socket
             nodes[node_key] = node:new(nil, nil, node_key)
         else           -- host:port
             local host = string.sub(node_key, 1,i-1)
             local port = string.sub(node_key, i+1)
-            ngx.say(host, "  " ,port)
             nodes[node_key] = node:new(host,port)
         end
         if not nodes[node_key] then
@@ -68,12 +67,12 @@ function _M.refresh(self)
     local got = false
     self.nodenum = 0
     for nodekey,nd in pairs(self.nodes) do
-        ngx.say("\r\n---------- connect "..nodekey.." to get node map ----------")
+        ngx.log(ngx.DEBUG, "connect "..(nodekey or "nil").. " to get node map")
         local res, err = nd:do_cluster_cmd("nodes")
         if not res then   -- failed to get node map 
-            ngx.say("failed to get node map from " .. (nodekey or "nil"))
+            ngx.log(ngx.WARN, "failed to get node map from " .. (nodekey or "nil"))
         else              -- succeeded to get node map
-            ngx.say("succeeded to get node map from " .. (nodekey or "nil"))
+            ngx.log(ngx.DEBUG, "succeeded to get node map from " .. (nodekey or "nil"))
             --[[
             an example of node map:
             62f05cdf4bcaad8fcfa0cc2c32ac8e19e1c538b9 127.0.0.1:7001 master - 0 1469374853889 2 connected 6462-10922
@@ -95,19 +94,19 @@ function _M.refresh(self)
             9. Slots served...
             --]]
             for line in string.gmatch(res, "[^\r\n]+") do
-                ngx.say("line: ".. (line or "nil"))
+                ngx.log(ngx.DEBUG, "line: ".. (line or "nil"))
                 local nid,nkey,nflags,master,tlast_ping,tlast_pong,conf_epoch,status = 
                       string.match(line,"([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)[%s]+([^%s]+)")
-                ngx.say(
-                        "    nodeId     :  " .. nid .. "\r\n",
-                        "    nodeKey    :  " .. nkey .. "\r\n",
-                        "    flags      :  " .. nflags .. "\r\n",
-                        "    masterID   :  " .. master .. "\r\n",
-                        "    tlastPing  :  " .. tlast_ping .. "\r\n",
-                        "    tlastPong  :  " .. tlast_pong .. "\r\n",
-                        "    conf_epoch :  " .. conf_epoch .. "\r\n",
-                        "    status     :  " .. status
-                    )
+
+                ngx.log(ngx.DEBUG, "    nodeId     :  " .. (nid or "nil"))
+                ngx.log(ngx.DEBUG, "    nodeKey    :  " .. (nkey or "nil"))
+                ngx.log(ngx.DEBUG, "    flags      :  " .. (nflags or "nil"))
+                ngx.log(ngx.DEBUG, "    masterID   :  " .. (master or "nil"))
+                ngx.log(ngx.DEBUG, "    tlastPing  :  " .. (tlast_ping or "nil"))
+                ngx.log(ngx.DEBUG, "    tlastPong  :  " .. (tlast_pong or "nil"))
+                ngx.log(ngx.DEBUG, "    conf_epoch :  " .. (conf_epoch or "nil"))
+                ngx.log(ngx.DEBUG, "    status     :  " .. (status or "nil"))
+
                 if nid then   -- current line is a valid line
                     local i,j = string.find(nflags, "master") 
                     if i then -- current line is master
@@ -128,17 +127,17 @@ function _M.refresh(self)
 
                         local s,p = string.find(line,status)
                         local slotRanges = string.sub(line, p+1)   -- get everything after status field, that's slot ranges
-                        ngx.say("    slotRanges :  " .. slotRanges)
+                        ngx.log(ngx.DEBUG, "    slotRanges :  " .. (slotRanges or "nil"))
 
                         for range in string.gmatch(slotRanges, "[^ ]+") do  -- slotRanges is a string like "0-998 5461-6461 10923-16383, we get each range"
                             local s,e = string.match(range, "(%d+)-(%d+)")
-                            ngx.say("        range      :  " .. (s or "nil") .. "-" .. (e or "nil") .. "==> node:" .. (nkey or "nil"))
+                            ngx.log(ngx.DEBUG, "        range      :  " .. (s or "nil") .. "-" .. (e or "nil") .. "==> node:" .. (nkey or "nil"))
                             for k = s, e do
                                 self.slotmap[k] = self.nodes[nkey]
                             end
                         end
                     else  -- current line is slave
-                        ngx.say("    skip slave " .. (nkey or "nil"))
+                        ngx.log(ngx.DEBUG, "    skip slave " .. (nkey or "nil"))
                     end
                 end
             end
@@ -175,14 +174,14 @@ end
 
 local function _do_cmd(self, slot, ...)
     if self.needrefresh then
-        ngx.say("refresh because key moved ...")
+        ngx.log(ngx.WARN, "refresh slotmap ...")
         local ok,err = _M.refresh(self)
         if ok then
-            ngx.say("refresh success")
+            ngx.log(ngx.WARN, "refresh success")
             self.needrefresh = false
             self.errnum = 0
         else
-            ngx.say("refresh failed: "..(err or "nil"))
+            ngx.log(ngx.ERR, "refresh failed: "..(err or "nil"))
         end
     end
 
@@ -192,13 +191,13 @@ local function _do_cmd(self, slot, ...)
     if not res then
         self.errnum = self.errnum + 1
         if string.match(err,"MOVED%s+%d+%s+") then
-            ngx.say("key moved, need refresh")
+            ngx.log(ngx.WARN, "key moved, need refresh")
             self.needrefresh = true
         end
 
         local total_errnum2refresh = self.errnum2refresh * self.nodenum 
         if self.errnum >= total_errnum2refresh then
-            ngx.say("too many errors ("..self.errnum.."), need refresh")
+            ngx.log(ngx.WARN, "too many errors ("..self.errnum.."), need refresh")
             self.needrefresh = true
             self.errnum = 0
         end
@@ -210,7 +209,8 @@ end
 function _M.do_cmd(self, ...)
     local args = {...}
     if not args[1] then
-        ngx.say("invalid command: args[1] is nil")
+        ngx.log(ngx.ERR, "invalid command: args[1] is nil")
+        return nil, "Invalid Arg"
     else
         local cmd = string.lower(args[1])
         if cmd == "set" or 
@@ -221,13 +221,15 @@ function _M.do_cmd(self, ...)
         then
             local key = args[2]
             if not key then
-                ngx.say("invalid command: args[2] which is the key cannot be nil")
+                ngx.log(ngx.ERR, "invalid command: args[2] which is the key cannot be nil")
+                return nil, "Invalid Arg"
             else
                 local slot = _get_slot(key)
                 return _do_cmd(self, slot, ...)
             end
         else
-            ngx.say("command " .. cmd .. " not supported")
+            ngx.log(ngx.ERR, "command " .. (cmd or "nil") .. " not supported")
+            return nil, "Invalid Arg"
         end
     end
 end
