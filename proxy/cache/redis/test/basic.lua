@@ -112,6 +112,7 @@ local initial = nil
 local res, err = c1:do_cmd("get", "foobar")
 if not res then
     redis-cli -c -p 7000 set foobar 4321
+    initial = 4321
 else
     initial = res
 end
