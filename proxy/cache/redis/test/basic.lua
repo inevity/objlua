@@ -111,8 +111,7 @@ end
 local initial = nil
 local res, err = c1:do_cmd("get", "foobar")
 if not res then
-    ngx.say("ERROR: failed to get foobar before incr. err="..(err or "nil"))
-    succ = false
+    redis-cli -c -p 7000 set foobar 4321
 else
     initial = res
 end
