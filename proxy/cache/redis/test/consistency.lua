@@ -69,7 +69,7 @@ for i = 1, round do
         local res,err = c1:do_cmd("get",key)
         if not res then
             rfails = rfails+1
-        else
+        elseif type(res) ~= "userdata" then
             local expected = cache[key]
             if tonumber(expected) > tonumber(res) then       -- acked, but the write was lost
                 wlosts = wlosts + (tonumber(expected) - tonumber(res))
