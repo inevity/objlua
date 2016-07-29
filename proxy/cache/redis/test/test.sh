@@ -38,11 +38,11 @@ time1=`date +%s`
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent1_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent2_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent3_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent4_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent5_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent6_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent4_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent5_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent6_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent7_$stamp.log 2>&1 &
-curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent8_$stamp.log 2>&1 &
+curl -s "http://127.0.0.1:8080/redis/test/concurrent2?c=$steps" > $logdir/concurrent8_$stamp.log 2>&1 &
 curl -s "http://127.0.0.1:8080/redis/test/concurrent1?c=$steps" > $logdir/concurrent9_$stamp.log 2>&1 &
 
 wait
