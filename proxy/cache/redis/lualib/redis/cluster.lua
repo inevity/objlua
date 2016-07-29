@@ -40,15 +40,10 @@ function _M.new(self, ...)
     local args = {...}
     for i = 1, #args do
         local node_key = args[i]  -- unix socket or host:port
+
         ngx.log(ngx.DEBUG, "node_key: "..(node_key or "nil"))
-        local i,j = string.find(node_key, ":")
-        if not i then  -- unix socket
-            nodes[node_key] = node:new(nil, nil, node_key)
-        else           -- host:port
-            local host = string.sub(node_key, 1,i-1)
-            local port = string.sub(node_key, i+1)
-            nodes[node_key] = node:new(host,port)
-        end
+
+        nodes[node_key] = node:new(node_key)
         if not nodes[node_key] then
             return nil,"failed to create node " .. (node_key or "nil")
         end
@@ -110,16 +105,7 @@ function _M.refresh(self)
                 if nid then   -- current line is a valid line
                     local i,j = string.find(nflags, "master") 
                     if i then -- current line is master
-                        local s,p = string.find(nkey, ":")
-
-                        if not s then  -- unix socket
-                            self.nodes[nkey] = node:new(nil, nil, nkey)
-                        else           -- host:port
-                            local host = string.sub(nkey, 1,s-1)
-                            local port = string.sub(nkey, s+1)
-                            self.nodes[nkey] = node:new(host,port)
-                        end
-
+                        self.nodes[nkey] = node:new(nkey)
                         if not self.nodes[nkey] then
                             return nil,"failed to create node " .. (nkey or "nil")
                         end

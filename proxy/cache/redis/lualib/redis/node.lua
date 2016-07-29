@@ -1,6 +1,6 @@
 -- By Yuanguo, 22/7/2016
 
-local NODE_CONN = 4
+local NODE_CONN = 64 
 
 local ok, new_tab = pcall(require, "table.new")
 if not ok or type(new_tab) ~= "function" then
@@ -20,7 +20,7 @@ end
 local _M = new_tab(0, 155)
 _M._VERSION = '0.1'
 
-function _M.new(self, host, port, unisock)
+function _M.new(self, addr, cachesize)
     -- Yuanguo:
     -- A request uses the socket in this way:
     --     1. get a "socket object" from the queue 'socks';
@@ -53,11 +53,27 @@ function _M.new(self, host, port, unisock)
     --        connections; "socket objects" in the same request or different
     --        requests may bind to the same underlying connection (func 
     --        getreusedtimes can be used to get the reuse times);
-    local socks = queue:new(NODE_CONN)
-    --local socks = queue:new(NODE_CONN,true, host..":"..port)
-    for i = 1, NODE_CONN do
+    local cap = cachesize or NODE_CONN
+    local socks = queue:new(cap)
+    --local socks = queue:new(cap, true, addr)
+    for i = 1, cap do
         local sock = tcpsock:new()
         socks:enqueue(sock)
+    end
+
+    local host = nil
+    local port = nil
+    local unisock = nil
+
+    local i,j = string.find(addr, ":")
+    if not i then  --unix sock
+        unisock = addr
+    else
+        host = string.sub(addr,1,i-1)
+        port = string.sub(addr,i+1,-1)
+        if not tonumber(port) then
+            return nil, "port "..(port or "nil").." invalid"
+        end
     end
 
     return setmetatable(
